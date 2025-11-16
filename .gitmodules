@@ -1,0 +1,3 @@
+[submodule "Oasis"]
+	path = Oasis
+	url = https://github.com/EmilKD/Oasis.git
