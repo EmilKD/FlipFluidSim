@@ -168,7 +168,7 @@ void Fluid::UpdateObstacle(int id, const float& newPosX, const float& newPosY)
 	}*/
 }
 
-void Fluid::project_parallel(double dt) {
+void Fluid::ProjectParallel(double dt) {
 	cp = this->density * gridSize / dt;
 
 	std::for_each(std::execution::par_unseq, IterSubSteps.begin(), IterSubSteps.end(), [this](uint8_t n) 
@@ -208,7 +208,7 @@ void Fluid::project_parallel(double dt) {
 	});
 }
 
-void Fluid::project(double dt)
+void Fluid::Project(double dt)
 {
 	cp = this->density * gridSize / dt;
 	for (cell& c : cells)
@@ -256,7 +256,7 @@ void Fluid::project(double dt)
 }
 
 
-void Fluid::advectVelocity_parallel(double dt)
+void Fluid::AdvectVelocityParallel(double dt)
 {
 	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
 	{
@@ -276,17 +276,18 @@ void Fluid::advectVelocity_parallel(double dt)
 				std::fmin(std::fmax(thisCell.pos.x - thisCell.u * dt, 0.f), worldSize_x), 
 				std::fmin(std::fmax(thisCell.pos.y - avgV * dt, 0.f), worldSize_y) };
 
-			const vec2& sampledVel = sampleVelocity(samplePos);
-			thisCell.m = sampleDensity(samplePos);
-			thisCell.u = sampledVel.x;
-			thisCell.v = sampledVel.y;
+			const float& sampledVelX = SampleVelocity(samplePos, 0);
+			const float& sampledVelY = SampleVelocity(samplePos, 1);
+			thisCell.m = SampleDensity(samplePos);
+			thisCell.u = sampledVelX;
+			thisCell.v = sampledVelY;
 			
 			UpdateCellColor(i + j * gridCount_x, vec3(thisCell.m));
 		});
 	});
 }
 
-void Fluid::advectVelocity(double dt)
+void Fluid::AdvectVelocity(double dt)
 {
 	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
 	{
@@ -298,21 +299,21 @@ void Fluid::advectVelocity(double dt)
 				avgV = (thisCell->v + cells[thisCell->id_left].v + cells[thisCell->id_up].v + cells[i - 1 + (j + 1) * gridCount_x].v) / 4.0f;
 
 				const vec2& samplePos{ thisCell->pos.x - gridSize / 2.0f - dt * thisCell->u, thisCell->pos.y - dt * avgV };
-				thisCell->newU = sampleVelocity(samplePos).x;
+				thisCell->newU = SampleVelocity(samplePos, 0);
 			}
 			if (thisCell->s == 1 && cells[thisCell->id_down].s == 1 && j < gridCount_y - 2)
 			{
 				avgU = (thisCell->u + cells[thisCell->id_right].u + cells[thisCell->id_down].u + cells[i + 1 + (j - 1) * gridCount_x].u) / 4.0f;
 
 				const vec2& samplePos{ thisCell->pos.x - dt * avgU, thisCell->pos.y - gridSize / 2.0f - dt * thisCell->v };
-				thisCell->newV = sampleVelocity(samplePos).y;
+				thisCell->newV = SampleVelocity(samplePos, 1);
 			}
 			if (thisCell->s == 1) {
 				avgU = (thisCell->u + cells[thisCell->id_right].u) / 2.0f;
 				avgV = (thisCell->v + cells[thisCell->id_up].v) / 2.0f;
 
 				const vec2& samplePos{ thisCell->pos.x - avgU * dt, thisCell->pos.y - avgV * dt };
-				thisCell->newM = sampleDensity(samplePos);
+				thisCell->newM = SampleDensity(samplePos);
 			}
 		});
 	});
@@ -344,183 +345,202 @@ void Fluid::advectVelocity(double dt)
 	});
 }
 
-vec2 Fluid::sampleVelocity(const vec2 &samplePos) 
+float Fluid::SampleVelocity(const vec2 &samplePos, int type)
 {
 	const int sampleCelli = std::clamp(int(samplePos.x / worldSize_x * gridCount_x), 0, gridCount_x - 1);
 	const int sampleCellj = std::clamp(int(samplePos.y / worldSize_y * gridCount_y), 0, gridCount_y - 1);
 
-	const cell* sampleCell = &cells[sampleCelli + sampleCellj * gridCount_x];
+	const int& thisIdx = sampleCelli + sampleCellj * gridCount_x;
+	const cell* sampleCell = &cells[thisIdx];
 
-	if (sampleCell->s == 0)
-		return vec2(sampleCell->u, sampleCell->v);
-
-	if (sampleCellj == gridCount_y - 1)
-		return vec2(cells[sampleCell->id_down].u, cells[sampleCell->id_down].v);
-
-	const cell* c0, * c1, * c2, * c3;
-	// sampling v
-	if (samplePos.x < sampleCell->pos.x)
+	int id0, id1, id2, id3;
+	
+	if (type == 0)
 	{
-		c0 = &cells[sampleCelli - 1 + sampleCellj * gridCount_x];
-		c1 = sampleCell;
-		c2 = &cells[sampleCelli - 1 + (sampleCellj + 1) * gridCount_x];
-		c3 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
+		// sampling u
+
+		if (sampleCell->s == 0)
+			return sampleCell->u;
+
+		if (sampleCellj == gridCount_y - 1)
+			return cells[sampleCell->id_down].u;
+
+		if (samplePos.y > cells[sampleCelli + sampleCellj * gridCount_x].pos.y)
+		{
+			id0 = thisIdx;
+			id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
+			id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
+		}
+		else
+		{
+			id0 = sampleCelli + (sampleCellj - 1) * gridCount_x;
+			id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCount_x;
+			id2 = thisIdx;
+			id3 = sampleCelli + 1 + sampleCellj * gridCount_x;
+		}
+		const cell& c0 = cells[id0];
+		const cell& c1 = cells[id1];
+		const cell& c2 = cells[id2];
+		const cell& c3 = cells[id3];
+
+		const float& x_u = samplePos.x - (c0.pos.x - gridSize / 2.0f);
+		const float& y_u = samplePos.y - c0.pos.y;
+
+		const float& w00_u = 1 - x_u / gridSize;
+		const float& w01_u = x_u / gridSize;
+		const float& w10_u = 1 - y_u / gridSize;
+		const float& w11_u = y_u / gridSize;
+
+		return w00_u * w10_u * c0.u + w01_u * w10_u * c1.u + w00_u * w11_u * c2.u + w01_u * w11_u * c3.u;
 	}
-	else
+	else if (type == 1)
 	{
-		c0 = sampleCell;
-		c1 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
-		c2 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
-		c3 = &cells[sampleCelli + 1 + (sampleCellj + 1) * gridCount_x];
+		// sampling v
+
+		if (sampleCell->s == 0)
+			return sampleCell->v;
+
+		if (sampleCellj == gridCount_y - 1)
+			return cells[sampleCell->id_down].v;
+
+		if (samplePos.x < sampleCell->pos.x)
+		{
+			id0 = sampleCelli - 1 + sampleCellj * gridCount_x;
+			id1 = thisIdx;
+			id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
+			id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+		}
+		else
+		{
+			id0 = thisIdx;
+			id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
+			id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
+		}
+
+		const cell& c0 = cells[id0];
+		const cell& c1 = cells[id1];
+		const cell& c2 = cells[id2];
+		const cell& c3 = cells[id3];
+
+		const float x = samplePos.x - c0.pos.x;
+		const float y = samplePos.y - (c0.pos.y - gridSize / 2.0f);
+
+		const float w00 = 1 - x / gridSize;
+		const float w01 = x / gridSize;
+		const float w10 = 1 - y / gridSize;
+		const float w11 = y / gridSize;
+
+		return w00 * w10 * c0.v + w01 * w10 * c1.v + w00 * w11 * c2.v + w01 * w11 * c3.v;
 	}
-
-	const float x = samplePos.x - c0->pos.x;
-	const float y = samplePos.y - (c0->pos.y - gridSize / 2.0f);
-
-	const float w00 = 1 - x / gridSize;
-	const float w01 = x / gridSize;
-	const float w10 = 1 - y / gridSize;
-	const float w11 = y / gridSize;
-
-	const float sample_v = w00 * w10 * c0->v + w01 * w10 * c1->v + w00 * w11 * c2->v + w01 * w11 * c3->v;
-
-	// sampling u
-	if (samplePos.y > cells[sampleCelli + sampleCellj * gridCount_x].pos.y)
-	{
-		c0 = sampleCell;
-		c1 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
-		c2 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
-		c3 = &cells[sampleCelli + 1 + (sampleCellj + 1) * gridCount_x];
-	}
-	else
-	{
-		c0 = &cells[sampleCelli + (sampleCellj - 1) * gridCount_x];
-		c1 = &cells[sampleCelli + 1 + (sampleCellj - 1) * gridCount_x];
-		c2 = sampleCell;
-		c3 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
-	}
-
-	const float x_u = samplePos.x - (c0->pos.x - gridSize / 2.0f);
-	const float y_u = samplePos.y - c0->pos.y;
-
-	const float w00_u = 1 - x_u / gridSize;
-	const float w01_u = x_u / gridSize;
-	const float w10_u = 1 - y_u / gridSize;
-	const float w11_u = y_u / gridSize;
-
-	const float sample_u = w00_u * w10_u * c0->u + w01_u * w10_u * c1->u + w00_u * w11_u * c2->u + w01_u * w11_u * c3->u;
-
-	return vec2(sample_u, sample_v);
 }
 
-float Fluid::sampleDensity(const vec2& samplePos)
+float Fluid::SampleDensity(const vec2& samplePos)
 {
-	float samplede{ 0.0f };
-
 	const int sampleCelli = std::clamp(int(samplePos.x / worldSize_x * gridCount_x), 0, gridCount_x - 1);
 	const int sampleCellj = std::clamp(int(samplePos.y / worldSize_y * gridCount_y), 0, gridCount_y - 1);
 
-	cell* sampleCell = &cells[sampleCelli + sampleCellj * gridCount_x];
+	const int& thisIdx = sampleCelli + sampleCellj * gridCount_x;
+	cell* sampleCell = &cells[thisIdx];
 
 	if (sampleCell->s == 0)
 	{
 		return 0;
 	}
 
-	const cell* c0 = &cells[sampleCelli - 1 + (sampleCellj - 1) * gridCount_x];
-	const cell* c1 = &cells[sampleCelli - 1 + sampleCellj * gridCount_x];
-	const cell* c2 = &cells[sampleCelli - 1 + (sampleCellj + 1) * gridCount_x];
-	const cell* c3 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
-	const cell* c4 = &cells[sampleCelli + 1 + (sampleCellj - 1) * gridCount_x];
-	const cell* c5 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
-	const cell* c6 = &cells[sampleCelli + 1 + (sampleCellj - 1) * gridCount_x];
-	const cell* c7 = &cells[sampleCelli + (sampleCellj - 1) * gridCount_x];
+	int id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCount_x;
+	int id1 = sampleCelli - 1 + sampleCellj * gridCount_x;
+	int id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
+	int id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
 
 	if (samplePos.x <= sampleCell->pos.x && samplePos.y >= sampleCell->pos.y)
 	{
-		c0 = &cells[sampleCelli - 1 + sampleCellj * gridCount_x];
-		c1 = sampleCell;
-		c2 = &cells[sampleCelli - 1 + (sampleCellj + 1) * gridCount_x];
-		c3 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
+		id0 = sampleCelli - 1 + sampleCellj * gridCount_x;
+		id1 = thisIdx;
+		id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
+		id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
 	}
 	else if (samplePos.x <= sampleCell->pos.x && samplePos.y < sampleCell->pos.y)
 	{
-		c0 = &cells[sampleCelli - 1 + (sampleCellj - 1) * gridCount_x];
-		c1 = &cells[sampleCelli + (sampleCellj - 1) * gridCount_x];
-		c2 = &cells[sampleCelli - 1 + sampleCellj * gridCount_x];
-		c3 = sampleCell;
+		id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCount_x;
+		id1 = sampleCelli + (sampleCellj - 1) * gridCount_x;
+		id2 = sampleCelli - 1 + sampleCellj * gridCount_x;
+		id3 = thisIdx;
 	}
 	else if (samplePos.x > sampleCell->pos.x && samplePos.y >= sampleCell->pos.y)
 	{
-		c0 = sampleCell;
-		c1 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
-		c2 = &cells[sampleCelli + (sampleCellj + 1) * gridCount_x];
-		c3 = &cells[sampleCelli + 1 + (sampleCellj + 1) * gridCount_x];
+		id0 = thisIdx;
+		id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
+		id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+		id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
 	}
 	else if (samplePos.x > sampleCell->pos.x && samplePos.y < sampleCell->pos.y)
 	{
-		c0 = &cells[sampleCelli + (sampleCellj - 1) * gridCount_x];
-		c1 = &cells[sampleCelli + 1 + (sampleCellj - 1) * gridCount_x];
-		c2 = sampleCell;
-		c3 = &cells[sampleCelli + 1 + sampleCellj * gridCount_x];
+		id0 = sampleCelli + (sampleCellj - 1) * gridCount_x;
+		id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCount_x;
+		id2 = thisIdx;
+		id3 = sampleCelli + 1 + sampleCellj * gridCount_x;
 	}
 	else if (samplePos.x == sampleCell->pos.x && samplePos.y == sampleCell->pos.y)
 	{
 		return sampleCell->m;
 	}
 
-	const float x = samplePos.x - c0->pos.x;
-	const float y = samplePos.y - c0->pos.y;
+	const cell& c0 = cells[id0];
+	const cell& c1 = cells[id1];
+	const cell& c2 = cells[id2];
+	const cell& c3 = cells[id3];
 
-	const float w00 = 1 - x / gridSize;
-	const float w01 = x / gridSize;
-	const float w10 = 1 - y / gridSize;
-	const float w11 = y / gridSize;
+	const float& x = samplePos.x - c0.pos.x;
+	const float& y = samplePos.y - c0.pos.y;
 
-	return w00 * w10 * c0->m + w01 * w10 * c1->m + w00 * w11 * c2->m + w01 * w11 * c3->m;
+	const float& w00 = 1 - x / gridSize;
+	const float& w01 = x / gridSize;
+	const float& w10 = 1 - y / gridSize;
+	const float& w11 = y / gridSize;
+
+	return w00 * w10 * c0.m + w01 * w10 * c1.m + w00 * w11 * c2.m + w01 * w11 * c3.m;
 }
 
-// Not being used for now
-void Fluid::advectSmoke(double dt) {
-	float avgU{ 0.0f }, avgV{ 0.0f };
+void Fluid::AdvectSmoke(double dt) {
+	
 	vec2 samplePos{ vec2(0.0f, 0.0f) };
 
-	for (int i = 1; i < gridCount_x - 1; i++)
+	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
 	{
-		for (int j = 1; j < gridCount_y - 1; j++)
-		{
-			cell* const thisCell = &cells[i + j * gridCount_x];
-			if (thisCell->s != 0) {
-				avgU = (thisCell->u + cells[thisCell->id_right].u) / 2.0f;
-				avgV = (thisCell->v + cells[thisCell->id_right].v) / 2.0f;
-
-				samplePos.x = thisCell->pos.x - avgU * dt;
-				samplePos.y = thisCell->pos.y - avgV * dt;
-				
-				//cout << avgU * dt << endl;
-
-				int sampleCelli = std::min(std::max(int(samplePos.x / worldSize_x * gridCount_x), 1), gridCount_x - 1);
-				int sampleCellj = std::min(std::max(int(samplePos.y / worldSize_y * gridCount_y), 1), gridCount_y - 1);
-			
-				thisCell->newM = cells[sampleCelli + sampleCellj * gridCount_x].m;
-			}
-			
-		}
-	}
-	for (int i = 1; i < gridCount_x - 1; i++)
-	{
-		for (int j = 1; j < gridCount_y - 1; j++)
-		{
-			cell* const thisCell = &cells[i + j * gridCount_x];
-			if (thisCell->s != 0)
+		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &dt, &j](uint32_t i)
 			{
-				thisCell->m = thisCell->newM;
+				cell* const thisCell = &cells[i + j * gridCount_x];
+				if (thisCell->s == 0)
+					return;
+				const float& avgU = (thisCell->u + cells[thisCell->id_right].u) / 2.0f;
+				const float& avgV = (thisCell->v + cells[thisCell->id_right].v) / 2.0f;
+
+				const float& samplePosX = thisCell->pos.x - avgU * dt;
+				const float& samplePosY = thisCell->pos.y - avgV * dt;
+
+				const int& sampleCelli = std::clamp(int(samplePosX / worldSize_x * gridCount_x), 0, gridCount_x - 1);
+				const int& sampleCellj = std::clamp(int(samplePosY / worldSize_y * gridCount_y), 0, gridCount_y - 1);
+
+				thisCell->newM = cells[sampleCelli + sampleCellj * gridCount_x].m;
+				
+			});
+	});
+	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
+	{
+		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &dt, &j](uint32_t i)
+		{
+			cell& thisCell = cells[i + j * gridCount_x];
+			if (thisCell.s != 0)
+			{
+				thisCell.m = thisCell.newM;
 			}
-		}
-	}
+		});
+	});
 }
 
-void Fluid::extrapolate() 
+void Fluid::Extrapolate() 
 {
 	for (int i = 0; i <= gridCount_x - 1; i++)
 	{
@@ -551,35 +571,33 @@ void Fluid::extrapolate()
 	}
 }
 
-void Fluid::simulate(double dt) {
+void Fluid::Simulate(double dt) {
 	ndt = dt / substeps;
 
-	for (int i = 0; i < gridCount_x; i++) 
+	/*std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t i)
 	{
-		for (int j = 0; j < gridCount_y; j++) 
+		cell& thisCell = cells[i];
+		if (thisCell.s != 0)
 		{
-			cell* const thisCell = &cells[i + j * gridCount_x];
-			if (thisCell->s == 1)
-			{
-				//thisCell->v += -9.81 * dt;
-			}
+			thisCell.v += -9.83 * dt;
 		}
-	}
-
-	project_parallel(ndt);
-	//extrapolate();
-	advectVelocity(dt);
+	});*/
+	
+	ProjectParallel(ndt);
+	//Extrapolate();
+	AdvectVelocity(dt);
+	//AdvectSmoke(dt);
 	simulationTime += dt;
 }
 
 void Fluid::AddVelocity(const float& posX, const float& posY, const float& u, const float& v)
 {
-	static float amp{100};
+	static float amp{10};
 
 	inputIdx = std::clamp((int)(posX / gridSize), 1, gridCount_x - 2) + std::clamp((int)(posY / gridSize), 1, gridCount_y - 2) * gridCount_x;
 
 	cell& thisCell = cells[inputIdx];
 	inputU = u * amp;
 	inputV = v * amp;
-	inputM = std::abs(u) + std::abs(v) * amp*10;
+	inputM = std::abs(u) + std::abs(v) * amp*100;
 }

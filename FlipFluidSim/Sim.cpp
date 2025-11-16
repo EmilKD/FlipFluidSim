@@ -35,7 +35,7 @@ int main()
 			cursorVel.x / screenSize[0] * worldSize[0], // u
 			-(cursorVel.y / screenSize[1]) * worldSize[1]); // v
 
-		fluidSim.simulate(frameTime);
+		fluidSim.Simulate(frameTime);
 		RS.RenderPointCloud(fluidSim.GetPosBuffer(), fluidSim.GetColorBuffer(), numOfCells, RS.pointShader, 15);
 		RS.UpdateWindow();
 		

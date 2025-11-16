@@ -38,20 +38,20 @@ class Fluid
 public:
 	Fluid(const float& Size_x, const float& Size_y);	
 	//void render(GraphicalObj* gobj, const float &renderScale_x, const float &renderScale_y);
-	void project(double dt);
-	void advectVelocity(double dt);
-	void project_parallel(double dt);
-	void advectVelocity_parallel(double dt);
-	void advectSmoke(double dt);
-	void simulate(double dt);
-	void extrapolate();
+	void Project(double dt);
+	void AdvectVelocity(double dt);
+	void ProjectParallel(double dt);
+	void AdvectVelocityParallel(double dt);
+	void AdvectSmoke(double dt);
+	void Simulate(double dt);
+	void Extrapolate();
 	void AddObstacle(CircularObj* obj);
 	void UpdateObstacle(int id, const float& newPosX, const float& newPosY);
 	void UpdateCellColor(int idx, const vec3& color);
 	void GenPosBuffer();
 	void GenColorBuffer();
-	vec2 sampleVelocity(const vec2 &samplePos);
-	float sampleDensity(const vec2& samplePos);
+	float SampleVelocity(const vec2 &samplePos, int type = 0);
+	float SampleDensity(const vec2& samplePos);
 	void AddVelocity(const float& posX, const float& posY, const float& u, const float& v);
 
 	vector<float> GetPosBuffer() { return PositionBuffer; };
