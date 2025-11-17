@@ -4,7 +4,7 @@
 #include"../FlipFluidSim/src/Headers/Fluid.h"
 
 int screenSize[2] = { 1080, 720 };
-float worldSize[2] = {0.4, 0.3};
+float worldSize[2] = {0.8, 0.6};
 
 render_system::RenderSystem RS(screenSize);
 
@@ -17,8 +17,11 @@ int main()
 
 	double frameTime{ 0 };
 	vec2 cursorPos{ vec2(0.f) }, cursorPrevPos{ vec2(0.f) };
-
 	auto frameTimer = new std::chrono::high_resolution_clock();
+
+	const float& pointSize = screenSize[0] / fluidSim.gridCount_x + 0.5;
+
+	char charBuffer[256];
 
 	while (RS.CheckWindowClosureStatus())
 	{
@@ -36,13 +39,18 @@ int main()
 			-(cursorVel.y / screenSize[1]) * worldSize[1]); // v
 
 		fluidSim.Simulate(frameTime);
-		RS.RenderPointCloud(fluidSim.GetPosBuffer(), fluidSim.GetColorBuffer(), numOfCells, RS.pointShader, 15);
+		RS.RenderPointCloud(fluidSim.GetPosBuffer(), fluidSim.GetColorBuffer(), numOfCells, RS.pointShader, pointSize);
 		RS.UpdateWindow();
 		
 		auto frameTimerEnd = std::chrono::high_resolution_clock::now();
 
+		snprintf(charBuffer, sizeof(charBuffer), "FPS: %.1f", 1 / frameTime);
+		RS.RenderText(charBuffer, 20, 680, 0.5, vec3(1));
+
 		std::chrono::duration<double> frameDuration = frameTimerEnd - frameTimerStart;
 		frameTime = frameDuration.count(); 
+
+	
 	}
 
 	//RS.Terminate();
