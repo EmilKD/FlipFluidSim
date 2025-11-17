@@ -51,7 +51,6 @@ public:
 	void GenPosBuffer();
 	void GenColorBuffer();
 	float SampleVelocity(const vec2 &samplePos, int type = 0);
-	float SampleDensity(const vec2& samplePos);
 	void AddVelocity(const float& posX, const float& posY, const float& u, const float& v);
 
 	vector<float> GetPosBuffer() { return PositionBuffer; };
@@ -66,7 +65,7 @@ public:
 	}
 
 public:
-	static constexpr float gridSize = 0.001; // meters
+	static constexpr float gridSize = 0.002; // meters
 	const int gridCount_x;
 	const int gridCount_y;
 	vector<cell> cells;
@@ -82,7 +81,7 @@ private:
 	const int ArraySize{ gridCount_x * gridCount_y };
 	vector<float> PositionBuffer, ColorBuffer;
 
-	int substeps{ 20 }, inputIdx{-1};
+	int substeps{ 50 }, inputIdx{-1};
 	double ndt{ 0 }, d;
 	float de{1.0}, cp;
 	float density{ 1000.0f };
