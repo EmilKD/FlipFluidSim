@@ -26,6 +26,7 @@ struct cell
 	float newM{ 0.0f };
 
 	double p{ 0.0f };
+	double newP{ 0.0f };
 
 	int id_right{ 0 }, id_left{ 0 }, id_up{ 0 }, id_down{ 0 };
 };
@@ -37,12 +38,10 @@ class Fluid
 	
 public:
 	Fluid(const float& Size_x, const float& Size_y);	
-	//void render(GraphicalObj* gobj, const float &renderScale_x, const float &renderScale_y);
 	void Project(double dt);
 	void AdvectVelocity(double dt);
 	void ProjectParallel(double dt);
 	void AdvectVelocityParallel(double dt);
-	void AdvectSmoke(double dt);
 	void Simulate(double dt);
 	void Extrapolate();
 	void AddObstacle(CircularObj* obj);
@@ -50,35 +49,36 @@ public:
 	void UpdateCellColor(int idx, const vec3& color);
 	void GenPosBuffer();
 	void GenColorBuffer();
-	float SampleVelocity(const vec2 &samplePos, int type = 0);
+	float Sample(const vec2 &samplePos, int type = 0);
 	void AddVelocity(const float& posX, const float& posY, const float& u, const float& v);
 
 	vector<float> GetPosBuffer() { return PositionBuffer; };
 	vector<float> GetColorBuffer() { return ColorBuffer; };
 
 	float xC(float worldx) {
-		return 2 * (worldx / worldSize_x - 0.5);
+		return 2 * (worldx / worldSizeX - 0.5);
 	}
 
 	float yC(float worldy) {
-		return 2 * (worldy / worldSize_y - 0.5);
+		return 2 * (worldy / worldSizeY - 0.5);
 	}
 
 public:
 	static constexpr float gridSize = 0.002; // meters
-	const int gridCount_x;
-	const int gridCount_y;
+	const int gridCountX;
+	const int gridCountY;
 	vector<cell> cells;
 	float InletVel[2]{ .2f, 0.f };
 
 private:
-	const float worldSize_x, worldSize_y;
+	const float worldSizeX, worldSizeY;
 	vector<cell*> cellPtrs;
 	vector<CircularObj*> Obstacles{};
-	vector<uint32_t> IterHeight, IterWidth, IterIndices, IterSubSteps;
+	vector<uint32_t> IterHeight, IterWidth, IterIndices, IterSubSteps, IterTiles;
+	vector<vector<int>> tileIndices;
 
 	// Creating the grid graphical object
-	const int ArraySize{ gridCount_x * gridCount_y };
+	const int ArraySize{ gridCountX * gridCountY };
 	vector<float> PositionBuffer, ColorBuffer;
 
 	int substeps{ 50 }, inputIdx{-1};
@@ -100,7 +100,7 @@ struct CircularObj
 	Fluid* grid{ nullptr };
 
 	CircularObj(const float x, const float y, const float radius, Fluid& grid)
-		: x{ x }, y{ y }, radius{ radius }, gridSize{ grid.gridSize }, gridCountX{ grid.gridCount_x }, gridCountY{ grid.gridCount_y }, grid{&grid}
+		: x{ x }, y{ y }, radius{ radius }, gridSize{ grid.gridSize }, gridCountX{ grid.gridCountX }, gridCountY{ grid.gridCountY }, grid{&grid}
 	{
 		for (int i = int((x - radius) / gridSize); i < int((x + radius) / gridSize); i++)
 		{

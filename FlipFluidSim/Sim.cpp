@@ -3,7 +3,7 @@
 #include"../Oasis/Source/Headers/RenderSystem.h"
 #include"../FlipFluidSim/src/Headers/Fluid.h"
 
-int screenSize[2] = { 1080, 720 };
+int screenSize[2] = { 960, 720 };
 float worldSize[2] = {0.8, 0.6};
 
 render_system::RenderSystem RS(screenSize);
@@ -19,7 +19,7 @@ int main()
 	vec2 cursorPos{ vec2(0.f) }, cursorPrevPos{ vec2(0.f) };
 	auto frameTimer = new std::chrono::high_resolution_clock();
 
-	const float& pointSize = screenSize[0] / fluidSim.gridCount_x + 0.5;
+	const float& pointSize = screenSize[0] / fluidSim.gridCountX + 0.6;
 
 	char charBuffer[256];
 

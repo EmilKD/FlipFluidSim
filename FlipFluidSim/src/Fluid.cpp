@@ -11,9 +11,9 @@ bool randomBool() {
 }
 
 Fluid::Fluid(const float& Size_x, const float& Size_y) :
-	gridCount_x{ static_cast<int>(Size_x / gridSize) },
-	gridCount_y{ static_cast<int>(Size_y / gridSize) },
-	worldSize_x{ Size_x }, worldSize_y{ Size_y }
+	gridCountX{ static_cast<int>(Size_x / gridSize) },
+	gridCountY{ static_cast<int>(Size_y / gridSize) },
+	worldSizeX{ Size_x }, worldSizeY{ Size_y }
 {
 	cell initialCell;
 	initialCell.m = 0.001f;
@@ -21,45 +21,45 @@ Fluid::Fluid(const float& Size_x, const float& Size_y) :
 	initialCell.v = 0;
 	initialCell.s = 1;
 
-	cells.resize(gridCount_x * gridCount_y, initialCell);
+	cells.resize(gridCountX * gridCountY, initialCell);
 
-	for (int i{ 0 }; i < gridCount_x; i++)
+	for (int i{ 0 }; i < gridCountX; i++)
 	{
-		for (int j{ 0 }; j < gridCount_y; j++)
+		for (int j{ 0 }; j < gridCountY; j++)
 		{
-			int idx = i + j * gridCount_x;
+			int idx = i + j * gridCountX;
 			cell& thisCell = cells[idx];
 			thisCell.pos = vec3(
-				worldSize_x * (i + 0.5f) / gridCount_x,
-				worldSize_y * (j + 0.5f) / gridCount_y,
+				worldSizeX * (i + 0.5f) / gridCountX,
+				worldSizeY * (j + 0.5f) / gridCountY,
 				0.0f
 			);
 
 			// Boundary conditions
 			// Default inward neighbors
 			int left = (i > 0) ? idx - 1 : idx;
-			int right = (i < gridCount_x - 1) ? idx + 1 : idx;
-			int down = (j > 0) ? idx - gridCount_x : idx;
-			int up = (j < gridCount_y - 1) ? idx + gridCount_x : idx;
+			int right = (i < gridCountX - 1) ? idx + 1 : idx;
+			int down = (j > 0) ? idx - gridCountX : idx;
+			int up = (j < gridCountY - 1) ? idx + gridCountX : idx;
 
 			// LEFT = INLET
 			if (i == 0) {
 				/*thisCell.s = 1;
 				thisCell.u = InletVel[0];
 				thisCell.v = InletVel[1];
-				if (j < (gridCount_y / 2 + 20) && j >(gridCount_y / 2 - 20))
+				if (j < (gridCountY / 2 + 20) && j >(gridCountY / 2 - 20))
 					thisCell.m = 1;*/
 				//left = idx;         
 				//right = idx + 1;   
 			}
 
 			// RIGHT = OUTLET (OPEN)
-			if (i == gridCount_x - 1) {
+			if (i == gridCountX - 1) {
 				//right = idx;        
 				//eft = idx - 1;
 			}
 
-			if (i == 0 || j == 0 || i == gridCount_x - 1 || j == gridCount_y - 1)
+			if (i == 0 || j == 0 || i == gridCountX - 1 || j == gridCountY - 1)
 				thisCell.s = 0;
 
 			thisCell.id_left = left;
@@ -72,32 +72,62 @@ Fluid::Fluid(const float& Size_x, const float& Size_y) :
 	GenPosBuffer();
 	GenColorBuffer();
 
-	IterWidth.resize(gridCount_x);
-	for (size_t i = 0; i < gridCount_x; i++)
+	IterWidth.resize(gridCountX);
+	for (size_t i = 0; i < gridCountX; i++)
 		IterWidth.at(i) = i;
 
-	IterHeight.resize(gridCount_y);
-	for (size_t i = 0; i < gridCount_y; i++)
+	IterHeight.resize(gridCountY);
+	for (size_t i = 0; i < gridCountY; i++)
 		IterHeight.at(i) = i;
 
 	IterSubSteps.resize(substeps);
 	for (size_t i = 0; i < substeps; i++)
 		IterSubSteps.at(i) = i;
 
-	const int spacing = 4;
-	IterIndices.resize((gridCount_x) * (gridCount_y));
+	const int spacing = 1;
 	for (size_t s = 0; s < spacing; s++)
 		for (size_t p = 0; p < spacing; p++)
-			for (size_t j = s; j < gridCount_y; j += spacing)
-				for (size_t i = p; i < gridCount_x; i += spacing)
-					IterIndices[i + j * (gridCount_x)] = i + j * gridCount_x;
+			for (size_t j = s; j < gridCountY; j += spacing)
+				for (size_t i = p; i < gridCountX; i += spacing)
+					IterIndices.push_back(i + j * (gridCountX));
 				
-	if ((gridCount_x) * (gridCount_y) != IterIndices.size())
+	if ((gridCountX) * (gridCountY) != IterIndices.size())
 	{
 		printf("Iterator size: %i\n", IterIndices.size());
-		printf("correct size: %i\n", (gridCount_x - 2) * (gridCount_y - 2));
+		printf("correct size: %i\n", (gridCountX - 2) * (gridCountY - 2));
 		throw std::invalid_argument("iterator construction failed");
 	}
+
+	// Tiling
+	const int tileSize = 16;
+	const int tileCountX = (gridCountX + tileSize - 1) / tileSize;
+	const int tileCountY = (gridCountY + tileSize - 1) / tileSize;
+	
+	tileIndices.resize(tileCountX * tileCountY);
+
+	for (size_t j = 0; j < tileCountY; j++)
+	{
+		for (size_t i = 0; i < tileCountX; i++)
+		{
+			for (size_t y = 0; y < tileSize; y++)
+			{
+				const int gy = j * tileSize + y;
+				if (gy >= gridCountY) break;
+
+				for (size_t x = 0; x < tileSize; x++)
+				{
+					const int gx = i * tileSize + x;
+					if (gx >= gridCountX) break;
+
+					tileIndices[i + j * tileCountX].push_back(x + i * tileSize + (y + j * tileSize) * gridCountX);
+				}
+			}
+		}
+	}
+
+	IterTiles.resize(tileCountX * tileCountY);
+	for (size_t i = 0; i < tileCountX * tileCountY; i++)
+		IterTiles.at(i) = i;
 }
 
 void Fluid::GenPosBuffer() 
@@ -169,22 +199,23 @@ void Fluid::UpdateObstacle(int id, const float& newPosX, const float& newPosY)
 }
 
 void Fluid::ProjectParallel(double dt) {
-	cp = this->density * gridSize / dt;
+	const float& cp = this->density * gridSize / dt;
 
-	std::for_each(std::execution::par_unseq, IterSubSteps.begin(), IterSubSteps.end(), [this](uint32_t n)
+	for (size_t n{ 0 }; n < substeps; n++)
 	{
-		std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this](uint32_t i)
+		std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &cp](uint32_t i)
 		{
 			cell& thisCell = cells[i];
 
-			//if (thisCell.s == 0)
-				//continue;
+			if (thisCell.s == 0) {
+				thisCell.p = 0;
+				thisCell.u = 0;
+				thisCell.v = 0;
+				return;
+			}
 
 			const double& d = (thisCell.u - cells[thisCell.id_right].u + thisCell.v - cells[thisCell.id_up].v) * overRelaxation;
 			const int& s = cells[thisCell.id_down].s + cells[thisCell.id_up].s + cells[thisCell.id_left].s + cells[thisCell.id_right].s;
-
-			if (s == 0) // Obstacle velocity should be added
-				return;
 
 			thisCell.p += d / s * cp;
 			thisCell.u -= d / s * cells[thisCell.id_left].s;
@@ -192,7 +223,7 @@ void Fluid::ProjectParallel(double dt) {
 			thisCell.v -= d / s * cells[thisCell.id_down].s;
 			cells[thisCell.id_up].v += d / s * cells[thisCell.id_up].s;
 		});
-	});
+	}
 	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this](uint32_t idx)
 	{
 		cell& thisCell = cells[idx];
@@ -208,20 +239,21 @@ void Fluid::Project(double dt)
 
 	for (size_t n{0}; n < substeps; n++)
 	{
-		for (size_t i{ 0 }; i < gridCount_x; i++)
+		for (size_t i{ 0 }; i < gridCountX; i++)
 		{
-			for (size_t j{ 0 }; j < gridCount_y; j++)
+			for (size_t j{ 0 }; j < gridCountY; j++)
 			{
-				cell& thisCell = cells[i + j * gridCount_x];
+				cell& thisCell = cells[i + j * gridCountX];
 
-				//if (thisCell.s == 0)
-					//continue;
+				if (thisCell.s == 0) {
+					thisCell.p = 0;
+					thisCell.u = 0;
+					thisCell.v = 0;
+					continue;
+				}
 
 				const double& d = (thisCell.u - cells[thisCell.id_right].u + thisCell.v - cells[thisCell.id_up].v) * overRelaxation;
 				const int& s = cells[thisCell.id_down].s + cells[thisCell.id_up].s + cells[thisCell.id_left].s + cells[thisCell.id_right].s;
-
-				if (s == 0) // Obstacle velocity should be added
-					continue;
 
 				thisCell.p += d / s * cp;
 				thisCell.u -= d / s * cells[thisCell.id_left].s;
@@ -230,87 +262,102 @@ void Fluid::Project(double dt)
 				cells[thisCell.id_up].v += d / s * cells[thisCell.id_up].s;
 			}
 		}
-		if (n < substeps - 1)
-			continue;
-		else
+	}
+	for (size_t i{ 0 }; i < gridCountX; i++)
+	{
+		for (size_t j{ 0 }; j < gridCountY; j++)
 		{
-			for (size_t i{ 0 }; i < gridCount_x; i++)
-			{
-				for (size_t j{ 0 }; j < gridCount_y; j++)
-				{
-					cell& thisCell = cells[i + j * gridCount_x];
-					thisCell.p /= substeps;
-				}
-			}
+			cell& thisCell = cells[i + j * gridCountX];
+			thisCell.p /= substeps;
 		}
 	}
-	//printf("pressure at depth %0.5f: %0.2f\n", cells[20].pos.y, cells[gridCount_x + 20].p); // pressure sensor at the bottom of the container
+	//printf("pressure at depth %0.5f: %0.2f\n", cells[20].pos.y, cells[gridCountX + 20].p); // pressure sensor at the bottom of the container
 }
 
 
 void Fluid::AdvectVelocityParallel(double dt)
 {
-	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
-	{
-		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &dt, &j](uint32_t i)
+	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t idx)
 		{
-			cell& thisCell = cells[i + j * gridCount_x];
-			if (thisCell.s == 0)  // Skip boundary cells
+			cell& const thisCell = cells[idx];
+			if (thisCell.s == 1 && cells[thisCell.id_left].s == 1 && cells[thisCell.id_right].s == 1 && cells[thisCell.id_down].s == 1 && cells[thisCell.id_up].s == 1)
 			{
-				UpdateCellColor(i + j * gridCount_x, vec3(thisCell.m));
-				return;
+				const float& avgV = (thisCell.v + cells[thisCell.id_left].v + cells[thisCell.id_up].v + cells[cells[thisCell.id_left].id_up].v) / 4.0f;
+
+				const vec2& samplePosU{ thisCell.pos.x - gridSize / 2.0f - dt * thisCell.u, thisCell.pos.y - dt * avgV };
+				thisCell.newU = Sample(samplePosU, 0);
+
+				const float& avgU = (thisCell.u + cells[thisCell.id_right].u + cells[thisCell.id_down].u + cells[cells[thisCell.id_right].id_down].u) / 4.0f;
+
+				const vec2& samplePosV{ thisCell.pos.x - dt * avgU, thisCell.pos.y - gridSize / 2.0f - dt * thisCell.v };
+				thisCell.newV = Sample(samplePosV, 1);
 			}
-			
-			//float avgU{ 0.0f };
 
-			const float& avgV = (thisCell.v + cells[thisCell.id_left].v + cells[thisCell.id_up].v + cells[thisCell.id_up - 1].v) / 4.f;
-			const vec2& samplePos{ 
-				std::fmin(std::fmax(thisCell.pos.x - thisCell.u * dt, 0.f), worldSize_x), 
-				std::fmin(std::fmax(thisCell.pos.y - avgV * dt, 0.f), worldSize_y) };
+			const float& avgU = (thisCell.u + cells[thisCell.id_right].u) / 2.0f;
+			const float& avgV = (thisCell.v + cells[thisCell.id_up].v) / 2.0f;
 
-			const float& sampledVelX = SampleVelocity(samplePos, 0);
-			const float& sampledVelY = SampleVelocity(samplePos, 1);
-			thisCell.m = SampleVelocity(samplePos, 2);
-			thisCell.u = sampledVelX;
-			thisCell.v = sampledVelY;
-			
-			UpdateCellColor(i + j * gridCount_x, vec3(thisCell.m));
+			const vec2& samplePos{ thisCell.pos.x - avgU * dt, thisCell.pos.y - avgV * dt };
+			thisCell.newM = Sample(samplePos, 2);
 		});
+
+	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t idx)
+	{
+		cell& thisCell = cells[idx];
+
+		if (idx == inputIdx)
+		{
+			thisCell.u = thisCell.newU + inputU;
+			thisCell.v = thisCell.newV + inputV;
+			thisCell.m = thisCell.newM + inputM;
+			//printf("m = %f\n", thisCell.m);
+		}
+		else
+		{
+			thisCell.u = thisCell.newU;
+			thisCell.v = thisCell.newV;
+			thisCell.m = thisCell.newM;
+		}
+
+		//UpdateCellColor(idx, vec3(thisCell.u, thisCell.v, 0)); // velocity field
+		UpdateCellColor(idx, vec3(0, thisCell.m * 0.6 + glm::abs(thisCell.u * thisCell.v) * 500 * 0.4, thisCell.m * 0.3 + glm::abs(thisCell.u * thisCell.v) * 300 * 0.7) ); // smoke field
 	});
 }
 
 void Fluid::AdvectVelocity(double dt)
 {
-	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t idx)
+	for (int i = 0; i <= gridCountX - 1; i++)
 	{
-		cell& const thisCell = cells[idx];
-		if (thisCell.s == 1 && cells[thisCell.id_left].s == 1 && cells[thisCell.id_right].s == 1 && cells[thisCell.id_down].s == 1 && cells[thisCell.id_up].s == 1)
+		for (int j = 0; j <= gridCountY - 1; j++)
 		{
-			const float& avgV = (thisCell.v + cells[thisCell.id_left].v + cells[thisCell.id_up].v + cells[cells[thisCell.id_left].id_up].v) / 4.0f;
+			const int& idx = i + j * gridCountX;
+			cell& const thisCell = cells[idx];
 
-			const vec2& samplePosU{ thisCell.pos.x - gridSize / 2.0f - dt * thisCell.u, thisCell.pos.y - dt * avgV };
-			thisCell.newU = SampleVelocity(samplePosU, 0);
-		
-			const float& avgU = (thisCell.u + cells[thisCell.id_right].u + cells[thisCell.id_down].u + cells[cells[thisCell.id_right].id_down].u) / 4.0f;
+			if (thisCell.s == 1 && cells[thisCell.id_left].s == 1 && cells[thisCell.id_right].s == 1 && cells[thisCell.id_down].s == 1 && cells[thisCell.id_up].s == 1)
+			{
+				const float& avgV = (thisCell.v + cells[thisCell.id_left].v + cells[thisCell.id_up].v + cells[cells[thisCell.id_left].id_up].v) / 4.0f;
 
-			const vec2& samplePosV{ thisCell.pos.x - dt * avgU, thisCell.pos.y - gridSize / 2.0f - dt * thisCell.v };
-			thisCell.newV = SampleVelocity(samplePosV, 1);
+				const vec2& samplePosU{ thisCell.pos.x - gridSize / 2.0f - dt * thisCell.u, thisCell.pos.y - dt * avgV };
+				thisCell.newU = Sample(samplePosU, 0);
+
+				const float& avgU = (thisCell.u + cells[thisCell.id_right].u + cells[thisCell.id_down].u + cells[cells[thisCell.id_right].id_down].u) / 4.0f;
+
+				const vec2& samplePosV{ thisCell.pos.x - dt * avgU, thisCell.pos.y - gridSize / 2.0f - dt * thisCell.v };
+				thisCell.newV = Sample(samplePosV, 1);
+			}
+
+			const float& avgU = (thisCell.u + cells[thisCell.id_right].u) / 2.0f;
+			const float& avgV = (thisCell.v + cells[thisCell.id_up].v) / 2.0f;
+
+			const vec2& samplePos{ thisCell.pos.x - avgU * dt, thisCell.pos.y - avgV * dt };
+			thisCell.newM = Sample(samplePos, 2);
 		}
-		
-		const float& avgU = (thisCell.u + cells[thisCell.id_right].u) / 2.0f;
-		const float& avgV = (thisCell.v + cells[thisCell.id_up].v) / 2.0f;
+	}
 
-		const vec2& samplePos{ thisCell.pos.x - avgU * dt, thisCell.pos.y - avgV * dt };
-		thisCell.newM = SampleVelocity(samplePos, 2);
-
-
-	});
-
-	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this](uint32_t j)
+	for (int i = 0; i <= gridCountX - 1; i++)
 	{
-		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &j](uint32_t i)
+		for (int j = 0; j <= gridCountY - 1; j++)
 		{
-			const int& idx = i + j * gridCount_x;
+			const int& idx = i + j * gridCountX;
 			cell& thisCell = cells[idx];
 					
 			if (idx == inputIdx)
@@ -329,16 +376,16 @@ void Fluid::AdvectVelocity(double dt)
 					
 			//UpdateCellColor(idx, vec3(thisCell.u, thisCell.v, 0)); // velocity field
 			UpdateCellColor(idx, vec3(thisCell.m)); // smoke field
-		});
-	});
+		}
+	}
 }
 
-float Fluid::SampleVelocity(const vec2 &samplePos, int type)
+float Fluid::Sample(const vec2 &samplePos, int type)
 {
-	const int sampleCelli = std::clamp(int(samplePos.x / worldSize_x * gridCount_x), 0, gridCount_x - 1);
-	const int sampleCellj = std::clamp(int(samplePos.y / worldSize_y * gridCount_y), 0, gridCount_y - 1);
+	const int sampleCelli = std::clamp(int(samplePos.x / worldSizeX * gridCountX), 0, gridCountX - 1);
+	const int sampleCellj = std::clamp(int(samplePos.y / worldSizeY * gridCountY), 0, gridCountY - 1);
 
-	const int& thisIdx = sampleCelli + sampleCellj * gridCount_x;
+	const int& thisIdx = sampleCelli + sampleCellj * gridCountX;
 	const cell* sampleCell = &cells[thisIdx];
 
 	int id0, id1, id2, id3;
@@ -350,22 +397,22 @@ float Fluid::SampleVelocity(const vec2 &samplePos, int type)
 		if (sampleCell->s == 0)
 			return sampleCell->u;
 
-		if (sampleCellj == gridCount_y - 1)
+		if (sampleCellj == gridCountY - 1)
 			return cells[sampleCell->id_down].u;
 
-		if (samplePos.y > cells[sampleCelli + sampleCellj * gridCount_x].pos.y)
+		if (samplePos.y > cells[sampleCelli + sampleCellj * gridCountX].pos.y)
 		{
 			id0 = thisIdx;
-			id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
-			id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
-			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
+			id1 = sampleCelli + 1 + sampleCellj * gridCountX;
+			id2 = sampleCelli + (sampleCellj + 1) * gridCountX;
+			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCountX;
 		}
 		else
 		{
-			id0 = sampleCelli + (sampleCellj - 1) * gridCount_x;
-			id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCount_x;
+			id0 = sampleCelli + (sampleCellj - 1) * gridCountX;
+			id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCountX;
 			id2 = thisIdx;
-			id3 = sampleCelli + 1 + sampleCellj * gridCount_x;
+			id3 = sampleCelli + 1 + sampleCellj * gridCountX;
 		}
 		const cell& c0 = cells[id0];
 		const cell& c1 = cells[id1];
@@ -389,22 +436,22 @@ float Fluid::SampleVelocity(const vec2 &samplePos, int type)
 		if (sampleCell->s == 0)
 			return sampleCell->v;
 
-		if (sampleCellj == gridCount_y - 1)
+		if (sampleCellj == gridCountY - 1)
 			return cells[sampleCell->id_down].v;
 
 		if (samplePos.x < sampleCell->pos.x)
 		{
-			id0 = sampleCelli - 1 + sampleCellj * gridCount_x;
+			id0 = sampleCelli - 1 + sampleCellj * gridCountX;
 			id1 = thisIdx;
-			id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
-			id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+			id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCountX;
+			id3 = sampleCelli + (sampleCellj + 1) * gridCountX;
 		}
 		else
 		{
 			id0 = thisIdx;
-			id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
-			id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
-			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
+			id1 = sampleCelli + 1 + sampleCellj * gridCountX;
+			id2 = sampleCelli + (sampleCellj + 1) * gridCountX;
+			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCountX;
 		}
 
 		const cell& c0 = cells[id0];
@@ -429,38 +476,38 @@ float Fluid::SampleVelocity(const vec2 &samplePos, int type)
 			return 0;
 		}
 
-		int id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCount_x;
-		int id1 = sampleCelli - 1 + sampleCellj * gridCount_x;
-		int id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
-		int id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+		int id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCountX;
+		int id1 = sampleCelli - 1 + sampleCellj * gridCountX;
+		int id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCountX;
+		int id3 = sampleCelli + (sampleCellj + 1) * gridCountX;
 
 		if (samplePos.x <= sampleCell->pos.x && samplePos.y >= sampleCell->pos.y)
 		{
-			id0 = sampleCelli - 1 + sampleCellj * gridCount_x;
+			id0 = sampleCelli - 1 + sampleCellj * gridCountX;
 			id1 = thisIdx;
-			id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCount_x;
-			id3 = sampleCelli + (sampleCellj + 1) * gridCount_x;
+			id2 = sampleCelli - 1 + (sampleCellj + 1) * gridCountX;
+			id3 = sampleCelli + (sampleCellj + 1) * gridCountX;
 		}
 		else if (samplePos.x <= sampleCell->pos.x && samplePos.y < sampleCell->pos.y)
 		{
-			id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCount_x;
-			id1 = sampleCelli + (sampleCellj - 1) * gridCount_x;
-			id2 = sampleCelli - 1 + sampleCellj * gridCount_x;
+			id0 = sampleCelli - 1 + (sampleCellj - 1) * gridCountX;
+			id1 = sampleCelli + (sampleCellj - 1) * gridCountX;
+			id2 = sampleCelli - 1 + sampleCellj * gridCountX;
 			id3 = thisIdx;
 		}
 		else if (samplePos.x > sampleCell->pos.x && samplePos.y >= sampleCell->pos.y)
 		{
 			id0 = thisIdx;
-			id1 = sampleCelli + 1 + sampleCellj * gridCount_x;
-			id2 = sampleCelli + (sampleCellj + 1) * gridCount_x;
-			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCount_x;
+			id1 = sampleCelli + 1 + sampleCellj * gridCountX;
+			id2 = sampleCelli + (sampleCellj + 1) * gridCountX;
+			id3 = sampleCelli + 1 + (sampleCellj + 1) * gridCountX;
 		}
 		else if (samplePos.x > sampleCell->pos.x && samplePos.y < sampleCell->pos.y)
 		{
-			id0 = sampleCelli + (sampleCellj - 1) * gridCount_x;
-			id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCount_x;
+			id0 = sampleCelli + (sampleCellj - 1) * gridCountX;
+			id1 = sampleCelli + 1 + (sampleCellj - 1) * gridCountX;
 			id2 = thisIdx;
-			id3 = sampleCelli + 1 + sampleCellj * gridCount_x;
+			id3 = sampleCelli + 1 + sampleCellj * gridCountX;
 		}
 		else if (samplePos.x == sampleCell->pos.x && samplePos.y == sampleCell->pos.y)
 		{
@@ -484,52 +531,15 @@ float Fluid::SampleVelocity(const vec2 &samplePos, int type)
 	}
 }
 
-void Fluid::AdvectSmoke(double dt) {
-	
-	vec2 samplePos{ vec2(0.0f, 0.0f) };
-
-	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
-	{
-		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &dt, &j](uint32_t i)
-			{
-				cell* const thisCell = &cells[i + j * gridCount_x];
-				if (thisCell->s == 0)
-					return;
-				const float& avgU = (thisCell->u + cells[thisCell->id_right].u) / 2.0f;
-				const float& avgV = (thisCell->v + cells[thisCell->id_right].v) / 2.0f;
-
-				const float& samplePosX = thisCell->pos.x - avgU * dt;
-				const float& samplePosY = thisCell->pos.y - avgV * dt;
-
-				const int& sampleCelli = std::clamp(int(samplePosX / worldSize_x * gridCount_x), 0, gridCount_x - 1);
-				const int& sampleCellj = std::clamp(int(samplePosY / worldSize_y * gridCount_y), 0, gridCount_y - 1);
-
-				thisCell->newM = cells[sampleCelli + sampleCellj * gridCount_x].m;
-				
-			});
-	});
-	std::for_each(std::execution::par_unseq, IterHeight.begin(), IterHeight.end(), [this, &dt](uint32_t j)
-	{
-		std::for_each(std::execution::par_unseq, IterWidth.begin(), IterWidth.end(), [this, &dt, &j](uint32_t i)
-		{
-			cell& thisCell = cells[i + j * gridCount_x];
-			if (thisCell.s != 0)
-			{
-				thisCell.m = thisCell.newM;
-			}
-		});
-	});
-}
-
 void Fluid::Extrapolate() 
 {
-	for (int i = 0; i <= gridCount_x - 1; i++)
+	for (int i = 0; i <= gridCountX - 1; i++)
 	{
-		for (int j = 0; j <= gridCount_y - 1; j++)
+		for (int j = 0; j <= gridCountY - 1; j++)
 		{
-			cell* const thisCell = &cells[i + j * gridCount_x];
+			cell* const thisCell = &cells[i + j * gridCountX];
 
-			if (j==0 || j == gridCount_y - 1)
+			if (j==0 || j == gridCountY - 1)
 			{
 				thisCell->v = 0;
 				thisCell->u = 0;
@@ -541,9 +551,9 @@ void Fluid::Extrapolate()
 				thisCell->v = InletVel[1];
 				continue;
 			}
-			else if (i == gridCount_x - 1)
+			else if (i == gridCountX - 1)
 			{
-				const cell& L = cells[(i - 1) + j * gridCount_x];
+				const cell& L = cells[(i - 1) + j * gridCountX];
 				thisCell->u = L.u;
 				thisCell->v = L.v;
 				thisCell->p = L.p;
@@ -555,18 +565,18 @@ void Fluid::Extrapolate()
 void Fluid::Simulate(double dt) {
 	ndt = dt / substeps;
 
-	/*std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t i)
+	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &dt](uint32_t i)
 	{
 		cell& thisCell = cells[i];
-		if (thisCell.s != 0)
+		if (thisCell.s == 0)
 		{
 			thisCell.v += -9.83 * dt;
 		}
-	});*/
+	});
 	
 	ProjectParallel(ndt);
 	//Extrapolate();
-	AdvectVelocity(dt);
+	AdvectVelocityParallel(dt);
 	//AdvectSmoke(dt);
 	simulationTime += dt;
 }
@@ -575,7 +585,7 @@ void Fluid::AddVelocity(const float& posX, const float& posY, const float& u, co
 {
 	static float amp{10};
 
-	inputIdx = std::clamp((int)(posX / gridSize), 1, gridCount_x - 2) + std::clamp((int)(posY / gridSize), 1, gridCount_y - 2) * gridCount_x;
+	inputIdx = std::clamp((int)(posX / gridSize), 1, gridCountX - 2) + std::clamp((int)(posY / gridSize), 1, gridCountY - 2) * gridCountX;
 
 	cell& thisCell = cells[inputIdx];
 	inputU = u * amp;
