@@ -77,6 +77,9 @@ private:
 	vector<uint32_t> IterHeight, IterWidth, IterIndices, IterSubSteps, IterTiles;
 	vector<vector<int>> tileIndices;
 
+	vector<float> posX, posY, u, v, p, m, newP, newU, newV, newM; 
+	vector<int> s;
+
 	// Creating the grid graphical object
 	const int ArraySize{ gridCountX * gridCountY };
 	vector<float> PositionBuffer, ColorBuffer;
