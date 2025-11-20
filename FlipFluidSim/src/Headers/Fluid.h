@@ -74,7 +74,7 @@ private:
 	const float worldSizeX, worldSizeY;
 	vector<cell*> cellPtrs;
 	vector<CircularObj*> Obstacles{};
-	vector<uint32_t> IterHeight, IterWidth, IterIndices, IterSubSteps, IterTiles;
+	vector<uint32_t> IterHeight, IterWidth, IterIndices, IterSubSteps, IterTiles, IterBlack, IterWhite;
 	vector<vector<int>> tileIndices;
 
 	vector<float> posX, posY, u, v, p, m, newP, newU, newV, newM; 

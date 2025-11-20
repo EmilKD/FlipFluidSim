@@ -125,6 +125,41 @@ Fluid::Fluid(const float& Size_x, const float& Size_y) :
 	IterTiles.resize(tileCountX * tileCountY);
 	for (size_t i = 0; i < tileCountX * tileCountY; i++)
 		IterTiles.at(i) = i;
+	
+	if (gridCountX % 2 == 1 && gridCountY % 2 == 1)
+	{
+		IterBlack.resize(gridCountX * gridCountY / 2 + 1);
+		IterWhite.resize(gridCountX * gridCountY / 2);
+	}
+	else
+	{
+		IterBlack.resize(gridCountX * gridCountY / 2);
+		IterWhite.resize(gridCountX * gridCountY / 2);
+	}
+
+	if (gridCountX % 2 == 0)
+	{	
+		for (size_t j = 0; j < gridCountY; j++)
+		{
+			for (size_t i = 0; i < gridCountX; i++)
+			{
+				const int& idx = i + j * gridCountX;
+
+				if (idx % 2 == 0)
+				{
+					IterBlack[idx / 2] = idx;
+				}
+				else
+					IterWhite[idx / 2] = idx;
+			}
+		
+		}
+	}
+	//for (size_t i = 0; i < 20; i++)
+	//{
+	//	std::cout << "black: " << IterBlack[i] << std::endl;
+	//	std::cout << "white: " << IterWhite[i] << std::endl;
+	//}
 }
 
 void Fluid::GenPosBuffer() 
@@ -198,7 +233,7 @@ void Fluid::ProjectParallel(double dt) {
 
 	for (size_t n{ 0 }; n < substeps; n++)
 	{
-		std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this, &cp](uint32_t i)
+		std::for_each(std::execution::par_unseq, IterBlack.begin(), IterBlack.end(), [this, &cp](uint32_t i)
 		{
 			cell& thisCell = cells[i];
 
@@ -218,12 +253,31 @@ void Fluid::ProjectParallel(double dt) {
 			v[i] -= d / S * s[thisCell.id_down];
 			v[thisCell.id_up] += d / S * s[thisCell.id_up];
 		});
+		std::for_each(std::execution::par_unseq, IterWhite.begin(), IterWhite.end(), [this, &cp](uint32_t i)
+			{
+				cell& thisCell = cells[i];
+
+				if (s[i] == 0) {
+					p[i] = 0;
+					u[i] = 0;
+					v[i] = 0;
+					return;
+				}
+
+				const double& d = (u[i] - u[thisCell.id_right] + v[i] - v[thisCell.id_up]) * overRelaxation;
+				const int& S = s[thisCell.id_down] + s[thisCell.id_up] + s[thisCell.id_left] + s[thisCell.id_right];
+
+				p[i] += d / S * cp;
+				u[i] -= d / S * s[thisCell.id_left];
+				u[thisCell.id_right] += d / S * s[thisCell.id_right];
+				v[i] -= d / S * s[thisCell.id_down];
+				v[thisCell.id_up] += d / S * s[thisCell.id_up];
+			});
 	}
 	std::for_each(std::execution::par_unseq, IterIndices.begin(), IterIndices.end(), [this](uint32_t idx)
-	{
-		cell& thisCell = cells[idx];
-		p[idx] /= substeps;
-	});
+		{
+			p[idx] /= substeps;
+		});
 }
 
 void Fluid::AdvectVelocityParallel(double dt)
@@ -551,7 +605,7 @@ void Fluid::Simulate(double dt) {
 		cell& thisCell = cells[i];
 		if (s[i] == 0)
 		{
-			v[i] += -9.83 * dt;
+			//v[i] += -9.83 * dt;
 		}
 	});
 	
@@ -568,7 +622,7 @@ void Fluid::AddVelocity(const float& posX, const float& posY, const float& u, co
 
 	inputIdx = std::clamp((int)(posX / gridSize), 1, gridCountX - 2) + std::clamp((int)(posY / gridSize), 1, gridCountY - 2) * gridCountX;
 
-	inputU = u * amp;
-	inputV = v * amp;
+	inputU = u * amp * 0.7;
+	inputV = v * amp * 0.7;
 	inputM = std::abs(u) + std::abs(v) * amp*100;
 }
