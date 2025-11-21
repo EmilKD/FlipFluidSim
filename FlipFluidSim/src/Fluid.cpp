@@ -556,9 +556,7 @@ void Fluid::Simulate(double dt) {
 	});
 	
 	ProjectParallel(ndt);
-	//Extrapolate();
 	AdvectVelocityParallel(dt);
-	//AdvectSmoke(dt);
 	simulationTime += dt;
 }
 
@@ -568,7 +566,7 @@ void Fluid::AddVelocity(const float& posX, const float& posY, const float& u, co
 
 	inputIdx = std::clamp((int)(posX / gridSize), 1, gridCountX - 2) + std::clamp((int)(posY / gridSize), 1, gridCountY - 2) * gridCountX;
 
-	inputU = u * amp;
-	inputV = v * amp;
-	inputM = std::abs(u) + std::abs(v) * amp*100;
+	inputU = u * amp * 0.7;
+	inputV = v * amp * 0.7;
+	inputM = std::abs(u) + std::abs(v) * amp*50;
 }
