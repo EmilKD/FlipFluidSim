@@ -137,24 +137,24 @@ Fluid::Fluid(const float& Size_x, const float& Size_y) :
 		IterWhite.resize(gridCountX * gridCountY / 2);
 	}
 
-	if (gridCountX % 2 == 0)
-	{	
-		for (size_t j = 0; j < gridCountY; j++)
+	// Black & white indexing
+	int blackCounter{ 0 }, whiteCounter{ 0 };
+	
+	for (size_t j = 0; j < gridCountY; j++)
+	{
+		for (size_t i = 0; i < gridCountX; i++)
 		{
-			for (size_t i = 0; i < gridCountX; i++)
-			{
-				const int& idx = i + j * gridCountX;
+			const int& idx = i + j * gridCountX;
 
-				if (idx % 2 == 0)
-				{
-					IterBlack[idx / 2] = idx;
-				}
-				else
-					IterWhite[idx / 2] = idx;
+			if ((i + j) % 2 == 0)
+			{
+				IterBlack[blackCounter++] = idx;
 			}
-		
+			else
+				IterWhite[whiteCounter++] = idx;
 		}
 	}
+	
 	//for (size_t i = 0; i < 20; i++)
 	//{
 	//	std::cout << "black: " << IterBlack[i] << std::endl;
@@ -370,7 +370,6 @@ void Fluid::Project(double dt)
 	}
 	//printf("pressure at depth %0.5f: %0.2f\n", cells[20].pos.y, cells[gridCountX + 20].p); // pressure sensor at the bottom of the container
 }
-
 
 void Fluid::AdvectVelocity(double dt)
 {
@@ -605,14 +604,12 @@ void Fluid::Simulate(double dt) {
 		cell& thisCell = cells[i];
 		if (s[i] == 0)
 		{
-			//v[i] += -9.83 * dt;
+			v[i] += -9.83 * dt;
 		}
 	});
 	
 	ProjectParallel(ndt);
-	//Extrapolate();
 	AdvectVelocityParallel(dt);
-	//AdvectSmoke(dt);
 	simulationTime += dt;
 }
 
@@ -624,5 +621,5 @@ void Fluid::AddVelocity(const float& posX, const float& posY, const float& u, co
 
 	inputU = u * amp * 0.7;
 	inputV = v * amp * 0.7;
-	inputM = std::abs(u) + std::abs(v) * amp*100;
+	inputM = std::abs(u) + std::abs(v) * amp*20;
 }

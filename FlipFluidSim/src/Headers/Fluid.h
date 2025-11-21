@@ -64,7 +64,7 @@ public:
 	}
 
 public:
-	static constexpr float gridSize = 0.002; // meters
+	static constexpr float gridSize = 0.0025; // meters
 	const int gridCountX;
 	const int gridCountY;
 	vector<cell> cells;
@@ -84,7 +84,7 @@ private:
 	const int ArraySize{ gridCountX * gridCountY };
 	vector<float> PositionBuffer, ColorBuffer;
 
-	int substeps{ 50 }, inputIdx{-1};
+	int substeps{ 100 }, inputIdx{-1};
 	double ndt{ 0 }, d;
 	float de{1.0}, cp;
 	float density{ 1000.0f };
